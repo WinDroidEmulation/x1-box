@@ -41,8 +41,8 @@ android {
       cmake {
         arguments += listOf(
           "-DXEMU_ANDROID_BUILD_ID=3",
-          "-DCMAKE_C_FLAGS_DEBUG=-g0",
-          "-DCMAKE_CXX_FLAGS_DEBUG=-g0"
+          "-DCMAKE_C_FLAGS_DEBUG=-O2 -g0",
+          "-DCMAKE_CXX_FLAGS_DEBUG=-O2 -g0"
         )
         cppFlags += listOf("-std=c++17", "-fexceptions", "-frtti")
       }

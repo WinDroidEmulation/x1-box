@@ -203,7 +203,7 @@ ExternalProject_Add(glib_ep
     "${MESON_EXECUTABLE}" setup "${GLIB_BUILD_DIR}" "${GLIB_SOURCE_DIR}"
     --cross-file "${GLIB_CROSS_FILE}"
     --prefix "${GLIB_INSTALL_DIR}"
-    --buildtype "debug"
+    --buildtype "release"
     --default-library "static"
     -Dgtk_doc=false
     -Dman=false
