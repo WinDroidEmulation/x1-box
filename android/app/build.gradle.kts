@@ -105,6 +105,7 @@ dependencies {
   implementation("androidx.appcompat:appcompat:1.7.0")
   implementation("androidx.constraintlayout:constraintlayout:2.1.4")
   implementation("androidx.documentfile:documentfile:1.0.1")
+  implementation("io.coil-kt:coil:2.7.0")
   implementation("com.google.android.material:material:1.14.0-alpha07")
 }
 

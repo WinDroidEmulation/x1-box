@@ -6,8 +6,11 @@
 #include <toml++/toml.h>
 
 #include <android/log.h>
+#include <android/asset_manager.h>
+#include <android/asset_manager_jni.h>
 #include <jni.h>
 
+#include <climits>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
@@ -22,6 +25,10 @@
 namespace {
 constexpr const char* kLogTag = "xemu-android";
 constexpr const char* kPrefsName = "x1box_prefs";
+
+static JNIEnv* GetEnv();
+static jobject GetActivity(JNIEnv* env);
+static bool HasException(JNIEnv* env, const char* context);
 
 static void LogInfo(const char* msg) {
   __android_log_print(ANDROID_LOG_INFO, kLogTag, "%s", msg);
@@ -62,6 +69,83 @@ static bool FileExists(const std::string& path) {
 static bool IsTcgTuningEnabled() {
   const char* value = SDL_getenv("XEMU_ANDROID_TCG_TUNING");
   return !(value && value[0] == '0');
+}
+
+static void LoadGameControllerMappingsFromAssets() {
+  constexpr const char* kDbAssetName = "gamecontrollerdb.txt";
+
+  JNIEnv* env = GetEnv();
+  jobject activity = GetActivity(env);
+  if (!env || !activity) {
+    LogInfo("Controller mappings: JNI unavailable");
+    return;
+  }
+
+  jclass activityClass = env->GetObjectClass(activity);
+  jmethodID getAssets = env->GetMethodID(
+      activityClass, "getAssets", "()Landroid/content/res/AssetManager;");
+  if (!getAssets) {
+    LogInfo("Controller mappings: Activity.getAssets() not found");
+    return;
+  }
+
+  jobject assetManagerObj = env->CallObjectMethod(activity, getAssets);
+  if (HasException(env, "Activity.getAssets") || !assetManagerObj) {
+    LogInfo("Controller mappings: could not access AssetManager");
+    return;
+  }
+
+  AAssetManager* assetManager = AAssetManager_fromJava(env, assetManagerObj);
+  env->DeleteLocalRef(assetManagerObj);
+  if (!assetManager) {
+    LogInfo("Controller mappings: AssetManager bridge failed");
+    return;
+  }
+
+  AAsset* asset = AAssetManager_open(assetManager, kDbAssetName, AASSET_MODE_STREAMING);
+  if (!asset) {
+    LogInfo("Controller mappings: no custom gamecontrollerdb.txt in assets");
+    return;
+  }
+
+  const off_t length = AAsset_getLength(asset);
+  if (length <= 0 || length > INT_MAX) {
+    AAsset_close(asset);
+    LogError("Controller mappings: invalid gamecontrollerdb.txt size");
+    return;
+  }
+
+  std::vector<char> data(static_cast<size_t>(length));
+  size_t total = 0;
+  while (total < data.size()) {
+    const int read = AAsset_read(asset, data.data() + total,
+                                 static_cast<size_t>(data.size() - total));
+    if (read <= 0) {
+      break;
+    }
+    total += static_cast<size_t>(read);
+  }
+  AAsset_close(asset);
+
+  if (total == 0) {
+    LogError("Controller mappings: gamecontrollerdb.txt is empty");
+    return;
+  }
+  data.resize(total);
+
+  SDL_RWops* rw = SDL_RWFromConstMem(data.data(), static_cast<int>(data.size()));
+  if (!rw) {
+    LogErrorFmt("Controller mappings: SDL_RWFromConstMem failed: %s", SDL_GetError());
+    return;
+  }
+
+  const int added = SDL_GameControllerAddMappingsFromRW(rw, 1);
+  if (added < 0) {
+    LogErrorFmt("Controller mappings: failed to parse gamecontrollerdb.txt: %s", SDL_GetError());
+    return;
+  }
+
+  LogInfoInt("Controller mappings loaded from assets: %d", added);
 }
 
 static const char* GetTcgThreadFromEnv() {
@@ -434,6 +518,8 @@ extern "C" int SDL_main(int argc, char* argv[]) {
     __android_log_print(ANDROID_LOG_ERROR, kLogTag, "SDL_Init failed: %s", SDL_GetError());
     return 1;
   }
+  SDL_GameControllerEventState(SDL_ENABLE);
+  LoadGameControllerMappingsFromAssets();
 
   SetupFiles setup = SyncSetupFiles();
 

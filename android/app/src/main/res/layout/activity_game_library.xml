@@ -76,6 +76,45 @@
             app:iconGravity="textStart"
             app:iconPadding="8dp" />
 
+          <com.google.android.material.button.MaterialButtonToggleGroup
+            android:id="@+id/library_view_mode_toggle"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="12dp"
+            app:selectionRequired="true"
+            app:singleSelection="true">
+
+            <com.google.android.material.button.MaterialButton
+              android:id="@+id/btn_view_list"
+              style="?attr/materialButtonOutlinedStyle"
+              android:layout_width="0dp"
+              android:layout_height="wrap_content"
+              android:layout_weight="1"
+              android:text="@string/library_view_list"
+              app:icon="@android:drawable/ic_menu_agenda"
+              app:iconGravity="textStart"
+              app:iconPadding="8dp" />
+
+            <com.google.android.material.button.MaterialButton
+              android:id="@+id/btn_view_grid"
+              style="?attr/materialButtonOutlinedStyle"
+              android:layout_width="0dp"
+              android:layout_height="wrap_content"
+              android:layout_weight="1"
+              android:text="@string/library_view_cover_grid"
+              app:icon="@android:drawable/ic_dialog_dialer"
+              app:iconGravity="textStart"
+              app:iconPadding="8dp" />
+          </com.google.android.material.button.MaterialButtonToggleGroup>
+
+          <com.google.android.material.materialswitch.MaterialSwitch
+            android:id="@+id/switch_box_art_lookup"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:text="@string/library_box_art_lookup"
+            android:textColor="@color/xemu_text_muted" />
+
           <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
@@ -119,6 +158,14 @@
             android:layout_height="wrap_content"
             android:layout_marginTop="8dp"
             android:orientation="vertical" />
+
+          <LinearLayout
+            android:id="@+id/library_games_grid_container"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:orientation="vertical"
+            android:visibility="gone" />
         </LinearLayout>
       </com.google.android.material.card.MaterialCardView>
     </LinearLayout>
