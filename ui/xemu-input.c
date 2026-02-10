@@ -167,6 +167,10 @@ static void check_and_reset_in_range(int *btn, int min, int max,
 
 static void xemu_input_bindings_set_in_range(ControllerState *con)
 {
+    if (!con->controller_map) {
+        return;
+    }
+
 #define CHECK_RESET_BUTTON(btn)                                            \
     check_and_reset_in_range(&con->controller_map->controller_mapping.btn, \
                              SDL_CONTROLLER_BUTTON_INVALID,                \
@@ -213,7 +217,14 @@ static void xemu_input_bindings_reload_map(ControllerState *con)
 
     char guid[35] = { 0 };
     SDL_JoystickGetGUIDString(con->sdl_joystick_guid, guid, sizeof(guid));
-    if (!xemu_settings_load_gamepad_mapping(guid, &con->controller_map)) {
+    bool added_mapping =
+        xemu_settings_load_gamepad_mapping(guid, &con->controller_map);
+    if (!con->controller_map) {
+        fprintf(stderr, "Failed to load gamepad mapping for %s\n", guid);
+        return;
+    }
+
+    if (!added_mapping) {
         return;
     }
 
@@ -221,7 +232,7 @@ static void xemu_input_bindings_reload_map(ControllerState *con)
     // have been reallocated. Any gamepad mapping pointers for other controllers
     // are now invalid, and need to be reloaded.
     ControllerState *iter, *next;
-    bool is_new_mapping;
+    bool iter_is_new_mapping;
     QTAILQ_FOREACH_SAFE (iter, &available_controllers, entry, next) {
         if (iter == con || iter->type != INPUT_DEVICE_SDL_GAMECONTROLLER) {
             continue;
@@ -230,9 +241,9 @@ static void xemu_input_bindings_reload_map(ControllerState *con)
         memset(guid, 0, sizeof(guid));
         SDL_JoystickGetGUIDString(iter->sdl_joystick_guid, guid, sizeof(guid));
 
-        is_new_mapping =
+        iter_is_new_mapping =
             xemu_settings_load_gamepad_mapping(guid, &iter->controller_map);
-        assert(!is_new_mapping &&
+        assert(!iter_is_new_mapping &&
                "Existing controller GUIDs should exist in the config");
 
         xemu_input_bindings_set_in_range(iter);
@@ -566,6 +577,9 @@ void xemu_input_update_sdl_controller_state(ControllerState *state)
 {
     state->buttons = 0;
     memset(state->axis, 0, sizeof(state->axis));
+    if (!state->controller_map) {
+        return;
+    }
 
 #define SDL_MASK_BUTTON(state, btn, idx)                  \
     (SDL_GameControllerGetButton(                         \
@@ -633,6 +647,10 @@ void xemu_input_update_sdl_controller_state(ControllerState *state)
 void xemu_input_update_rumble(ControllerState *state)
 {
     if (state->type != INPUT_DEVICE_SDL_GAMECONTROLLER) {
+        return;
+    }
+
+    if (!state->controller_map) {
         return;
     }
 

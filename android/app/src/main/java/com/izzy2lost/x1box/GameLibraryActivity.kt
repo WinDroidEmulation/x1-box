@@ -1,6 +1,7 @@
 package com.izzy2lost.x1box
 
 import android.content.Intent
+import android.content.res.Configuration
 import android.net.Uri
 import android.os.Bundle
 import android.view.LayoutInflater
@@ -208,10 +209,13 @@ class GameLibraryActivity : AppCompatActivity() {
   private fun renderCoverGrid(games: List<GameEntry>) {
     val inflater = LayoutInflater.from(this)
     var row: LinearLayout? = null
+    val columns = resolveCoverGridColumns()
     val spacingPx = dp(8)
+    val halfSpacingPx = spacingPx / 2
 
     for ((index, game) in games.withIndex()) {
-      if (index % 2 == 0) {
+      val columnIndex = index % columns
+      if (columnIndex == 0) {
         row = LinearLayout(this).apply {
           orientation = LinearLayout.HORIZONTAL
         }
@@ -219,7 +223,7 @@ class GameLibraryActivity : AppCompatActivity() {
           LinearLayout.LayoutParams.MATCH_PARENT,
           LinearLayout.LayoutParams.WRAP_CONTENT
         )
-        if (index > 0) {
+        if (index >= columns) {
           rowLp.topMargin = dp(12)
         }
         gamesGridContainer.addView(row, rowLp)
@@ -227,11 +231,8 @@ class GameLibraryActivity : AppCompatActivity() {
 
       val item = inflater.inflate(R.layout.item_game_cover, row, false)
       val itemLp = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
-      if (index % 2 == 0) {
-        itemLp.marginEnd = spacingPx
-      } else {
-        itemLp.marginStart = spacingPx
-      }
+      itemLp.marginStart = if (columnIndex == 0) 0 else halfSpacingPx
+      itemLp.marginEnd = if (columnIndex == columns - 1) 0 else halfSpacingPx
       row!!.addView(item, itemLp)
 
       val nameText = item.findViewById<TextView>(R.id.game_cover_name_text)
@@ -244,11 +245,25 @@ class GameLibraryActivity : AppCompatActivity() {
       bindCoverArt(coverImage, game)
     }
 
-    if (games.size % 2 != 0) {
-      val filler = Space(this)
-      val fillerLp = LinearLayout.LayoutParams(0, 0, 1f)
-      fillerLp.marginStart = spacingPx
-      row?.addView(filler, fillerLp)
+    val remainder = games.size % columns
+    if (remainder != 0) {
+      for (columnIndex in remainder until columns) {
+        val filler = Space(this)
+        val fillerLp = LinearLayout.LayoutParams(0, 0, 1f)
+        fillerLp.marginStart = if (columnIndex == 0) 0 else halfSpacingPx
+        fillerLp.marginEnd = if (columnIndex == columns - 1) 0 else halfSpacingPx
+        row?.addView(filler, fillerLp)
+      }
+    }
+  }
+
+  private fun resolveCoverGridColumns(): Int {
+    val widthDp = resources.configuration.screenWidthDp
+    val suggested = (widthDp / 180).coerceIn(2, 4)
+    return if (resources.configuration.orientation == Configuration.ORIENTATION_LANDSCAPE) {
+      maxOf(3, suggested)
+    } else {
+      suggested
     }
   }
 

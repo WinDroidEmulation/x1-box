@@ -76,6 +76,10 @@ __attribute__((used)) static void *xemu_android_force_smbus_storage_ref =
 extern void xemu_android_force_usb_hub_link(void);
 __attribute__((used)) static void *xemu_android_force_usb_hub_ref =
     (void *)&xemu_android_force_usb_hub_link;
+/* Force-link the Xbox USB gamepad registration unit from the static lib. */
+extern void xemu_android_force_xid_gamepad_link(void);
+__attribute__((used)) static void *xemu_android_force_xid_gamepad_ref =
+    (void *)&xemu_android_force_xid_gamepad_link;
 
 #define XEMU_ANDROID_ACCEL_CPU_TYPE "accel-i386-cpu"
 

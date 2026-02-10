@@ -291,3 +291,9 @@ static void usb_xid_register_types(void)
 }
 
 type_init(usb_xid_register_types)
+
+#ifdef __ANDROID__
+void xemu_android_force_xid_gamepad_link(void)
+{
+}
+#endif

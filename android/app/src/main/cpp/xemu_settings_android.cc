@@ -1,6 +1,7 @@
 #include "qemu/osdep.h"
 
 #include <SDL_filesystem.h>
+#include <SDL_gamecontroller.h>
 #include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -337,14 +338,127 @@ void remove_net_nat_forward_ports(unsigned int index)
 bool xemu_settings_load_gamepad_mapping(const char *guid,
                                         GamepadMappings **mapping)
 {
-    (void)guid;
+    if (!mapping) {
+        return false;
+    }
+
     *mapping = NULL;
+    if (!guid || *guid == '\0') {
+        return false;
+    }
+
+    unsigned int gamepad_mappings_count = g_config.input.gamepad_mappings_count;
+    for (unsigned int i = 0; i < gamepad_mappings_count; ++i) {
+        GamepadMappings *entry = &g_config.input.gamepad_mappings[i];
+        if (!entry->gamepad_id || strcmp(entry->gamepad_id, guid) != 0) {
+            continue;
+        }
+
+        // Preserve old behavior: global vibration off disables rumble.
+        if (!g_config.input.allow_vibration) {
+            entry->enable_rumble = false;
+        }
+
+        *mapping = entry;
+        return false;
+    }
+
+    auto apply_default_controller_mapping = [](GamepadMappings *entry) {
+        entry->controller_mapping.a = SDL_CONTROLLER_BUTTON_A;
+        entry->controller_mapping.b = SDL_CONTROLLER_BUTTON_B;
+        entry->controller_mapping.x = SDL_CONTROLLER_BUTTON_X;
+        entry->controller_mapping.y = SDL_CONTROLLER_BUTTON_Y;
+        entry->controller_mapping.back = SDL_CONTROLLER_BUTTON_BACK;
+        entry->controller_mapping.guide = SDL_CONTROLLER_BUTTON_GUIDE;
+        entry->controller_mapping.start = SDL_CONTROLLER_BUTTON_START;
+        entry->controller_mapping.lstick_btn = SDL_CONTROLLER_BUTTON_LEFTSTICK;
+        entry->controller_mapping.rstick_btn = SDL_CONTROLLER_BUTTON_RIGHTSTICK;
+        entry->controller_mapping.lshoulder = SDL_CONTROLLER_BUTTON_LEFTSHOULDER;
+        entry->controller_mapping.rshoulder =
+            SDL_CONTROLLER_BUTTON_RIGHTSHOULDER;
+        entry->controller_mapping.dpad_up = SDL_CONTROLLER_BUTTON_DPAD_UP;
+        entry->controller_mapping.dpad_down = SDL_CONTROLLER_BUTTON_DPAD_DOWN;
+        entry->controller_mapping.dpad_left = SDL_CONTROLLER_BUTTON_DPAD_LEFT;
+        entry->controller_mapping.dpad_right =
+            SDL_CONTROLLER_BUTTON_DPAD_RIGHT;
+        entry->controller_mapping.axis_left_x = SDL_CONTROLLER_AXIS_LEFTX;
+        entry->controller_mapping.axis_left_y = SDL_CONTROLLER_AXIS_LEFTY;
+        entry->controller_mapping.axis_right_x = SDL_CONTROLLER_AXIS_RIGHTX;
+        entry->controller_mapping.axis_right_y = SDL_CONTROLLER_AXIS_RIGHTY;
+        entry->controller_mapping.axis_trigger_left =
+            SDL_CONTROLLER_AXIS_TRIGGERLEFT;
+        entry->controller_mapping.axis_trigger_right =
+            SDL_CONTROLLER_AXIS_TRIGGERRIGHT;
+        entry->controller_mapping.invert_axis_left_x = false;
+        entry->controller_mapping.invert_axis_left_y = false;
+        entry->controller_mapping.invert_axis_right_x = false;
+        entry->controller_mapping.invert_axis_right_y = false;
+    };
+
+    const unsigned int old_count = g_config.input.gamepad_mappings_count;
+    const unsigned int new_count = old_count + 1;
+    GamepadMappings *new_mappings = static_cast<GamepadMappings *>(realloc(
+        g_config.input.gamepad_mappings, sizeof(GamepadMappings) * new_count));
+    if (!new_mappings) {
+        __android_log_print(ANDROID_LOG_ERROR, "xemu-android",
+                            "Failed to allocate gamepad mapping for %s", guid);
+        return false;
+    }
+
+    g_config.input.gamepad_mappings = new_mappings;
+    g_config.input.gamepad_mappings_count = new_count;
+
+    GamepadMappings *entry = &g_config.input.gamepad_mappings[old_count];
+    memset(entry, 0, sizeof(*entry));
+    entry->gamepad_id = strdup(guid);
+    entry->enable_rumble = g_config.input.allow_vibration;
+    apply_default_controller_mapping(entry);
+
+    *mapping = entry;
     return true;
 }
 
 void xemu_settings_reset_controller_mapping(const char *guid)
 {
-    (void)guid;
+    if (!guid || *guid == '\0') {
+        return;
+    }
+
+    unsigned int gamepad_mappings_count = g_config.input.gamepad_mappings_count;
+    for (unsigned int i = 0; i < gamepad_mappings_count; ++i) {
+        GamepadMappings *entry = &g_config.input.gamepad_mappings[i];
+        if (!entry->gamepad_id || strcmp(entry->gamepad_id, guid) != 0) {
+            continue;
+        }
+
+        entry->enable_rumble = g_config.input.allow_vibration;
+        entry->controller_mapping.a = SDL_CONTROLLER_BUTTON_A;
+        entry->controller_mapping.b = SDL_CONTROLLER_BUTTON_B;
+        entry->controller_mapping.x = SDL_CONTROLLER_BUTTON_X;
+        entry->controller_mapping.y = SDL_CONTROLLER_BUTTON_Y;
+        entry->controller_mapping.back = SDL_CONTROLLER_BUTTON_BACK;
+        entry->controller_mapping.guide = SDL_CONTROLLER_BUTTON_GUIDE;
+        entry->controller_mapping.start = SDL_CONTROLLER_BUTTON_START;
+        entry->controller_mapping.lstick_btn = SDL_CONTROLLER_BUTTON_LEFTSTICK;
+        entry->controller_mapping.rstick_btn = SDL_CONTROLLER_BUTTON_RIGHTSTICK;
+        entry->controller_mapping.lshoulder = SDL_CONTROLLER_BUTTON_LEFTSHOULDER;
+        entry->controller_mapping.rshoulder = SDL_CONTROLLER_BUTTON_RIGHTSHOULDER;
+        entry->controller_mapping.dpad_up = SDL_CONTROLLER_BUTTON_DPAD_UP;
+        entry->controller_mapping.dpad_down = SDL_CONTROLLER_BUTTON_DPAD_DOWN;
+        entry->controller_mapping.dpad_left = SDL_CONTROLLER_BUTTON_DPAD_LEFT;
+        entry->controller_mapping.dpad_right = SDL_CONTROLLER_BUTTON_DPAD_RIGHT;
+        entry->controller_mapping.axis_left_x = SDL_CONTROLLER_AXIS_LEFTX;
+        entry->controller_mapping.axis_left_y = SDL_CONTROLLER_AXIS_LEFTY;
+        entry->controller_mapping.axis_right_x = SDL_CONTROLLER_AXIS_RIGHTX;
+        entry->controller_mapping.axis_right_y = SDL_CONTROLLER_AXIS_RIGHTY;
+        entry->controller_mapping.axis_trigger_left = SDL_CONTROLLER_AXIS_TRIGGERLEFT;
+        entry->controller_mapping.axis_trigger_right = SDL_CONTROLLER_AXIS_TRIGGERRIGHT;
+        entry->controller_mapping.invert_axis_left_x = false;
+        entry->controller_mapping.invert_axis_left_y = false;
+        entry->controller_mapping.invert_axis_right_x = false;
+        entry->controller_mapping.invert_axis_right_y = false;
+        return;
+    }
 }
 
 void xemu_settings_reset_keyboard_mapping(void)
