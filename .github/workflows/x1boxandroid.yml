@@ -1,0 +1,251 @@
+name: Android (X1 BOX) - Signed
+
+on:
+  workflow_dispatch:
+    inputs:
+      increment_mode:
+        description: "Auto increment mode"
+        required: true
+        default: "per_day"
+        type: choice
+        options:
+          - per_day
+          - per_run
+
+permissions:
+  contents: write
+
+concurrency:
+  group: x1box-signed-release
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    environment: release
+
+    steps:
+      - name: Checkout (with submodules)
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install SDK / NDK / CMake
+        run: |
+          yes | sdkmanager --licenses
+          sdkmanager \
+            "platform-tools" \
+            "platforms;android-34" \
+            "build-tools;36.0.0" \
+            "cmake;3.30.3" \
+            "ndk;29.0.14206865"
+
+          echo "ANDROID_NDK_HOME=$ANDROID_SDK_ROOT/ndk/29.0.14206865" >> $GITHUB_ENV
+          echo "ANDROID_NDK_ROOT=$ANDROID_SDK_ROOT/ndk/29.0.14206865" >> $GITHUB_ENV
+
+      - name: Install Linux build tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            ninja-build \
+            meson \
+            pkg-config \
+            python3 \
+            python3-pip \
+            python3-setuptools \
+            curl \
+            unzip
+
+      - name: Install Rust (rustup + cargo)
+        shell: bash
+        run: |
+          set -e
+          echo "CARGO_HOME=$HOME/.cargo" >> $GITHUB_ENV
+          echo "RUSTUP_HOME=$HOME/.rustup" >> $GITHUB_ENV
+
+          curl -sSf https://sh.rustup.rs | sh -s -- -y
+          echo "$HOME/.cargo/bin" >> $GITHUB_PATH
+
+          rustc --version
+          cargo --version
+
+      - name: Add Rust Android target (arm64)
+        shell: bash
+        run: |
+          set -e
+          rustup target add aarch64-linux-android
+          rustup target list --installed
+
+      - name: Export Android toolchain for cargo
+        shell: bash
+        run: |
+          set -e
+          echo "CC_aarch64_linux_android=$ANDROID_NDK_ROOT/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android26-clang" >> $GITHUB_ENV
+          echo "CXX_aarch64_linux_android=$ANDROID_NDK_ROOT/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android26-clang++" >> $GITHUB_ENV
+          echo "AR_aarch64_linux_android=$ANDROID_NDK_ROOT/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-ar" >> $GITHUB_ENV
+
+      - name: Remove org.gradle.java.home (force setup-java)
+        shell: bash
+        run: |
+          set -e
+          echo "JAVA_HOME: $JAVA_HOME"
+          java -version
+
+          for f in android/gradle.properties gradle.properties "$HOME/.gradle/gradle.properties"; do
+            if [ -f "$f" ]; then
+              sed -i '/^\s*org\.gradle\.java\.home\s*=/d' "$f"
+            fi
+          done
+
+          echo "ORG_GRADLE_PROJECT_org.gradle.java.home=" >> $GITHUB_ENV
+          (grep -R "org.gradle.java.home" -n . || true)
+
+      - name: Fix DEFAULT_JVM_OPTS in gradlew (Linux + Windows)
+        shell: bash
+        run: |
+          set -e
+
+          if [ -f android/gradlew ]; then
+            sed -i 's/^DEFAULT_JVM_OPTS=.*/DEFAULT_JVM_OPTS="-Xmx2g -Xms256m"/' android/gradlew || true
+            sed -i 's/"\\"-Xmx64m\\""/"-Xmx2g -Xms256m"/g' android/gradlew || true
+            sed -i 's/"-Xmx64m"/"-Xmx2g -Xms256m"/g' android/gradlew || true
+          fi
+
+          if [ -f android/gradlew.bat ]; then
+            sed -i 's/^set DEFAULT_JVM_OPTS=.*/set DEFAULT_JVM_OPTS=-Xmx2g -Xms256m/' android/gradlew.bat || true
+          fi
+
+      - name: Patch NDK prebuilt host tag (windows -> linux)
+        shell: bash
+        run: |
+          set -e
+          echo "Patching any hardcoded windows-x86_64 to linux-x86_64..."
+
+          if [ -d android ]; then
+            grep -RIl "windows-x86_64" android || true
+            grep -RIl "windows-x86_64" android | xargs -r sed -i 's/windows-x86_64/linux-x86_64/g'
+          fi
+
+          echo "Verify:"
+          (grep -R "windows-x86_64" -n android || true)
+
+      - name: Delete .cxx (clean native cache)
+        run: rm -rf android/app/.cxx
+
+      - name: Decode keystore
+        shell: bash
+        run: |
+          set -e
+          echo "${{ secrets.ANDROID_KEYSTORE_B64 }}" | base64 -d > android/release.jks
+          ls -la android/release.jks
+
+      - name: Build Release (APK + AAB)
+        working-directory: android
+        shell: bash
+        run: |
+          set -e
+          chmod +x gradlew
+          ./gradlew --version
+          ./gradlew clean
+          ./gradlew :app:assembleRelease :app:bundleRelease
+
+      - name: Compute next release counter (rX) + matching tag
+        shell: bash
+        env:
+          MODE: ${{ inputs.increment_mode }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -e
+
+          DATE=$(date +'%d-%m-%Y')
+
+          if [ "$MODE" = "per_day" ]; then
+            PREFIX="X1BOX-${DATE}-r"
+          else
+            PREFIX="X1BOX-r"
+          fi
+
+          TAGS=$(curl -s \
+            -H "Authorization: Bearer $GITHUB_TOKEN" \
+            -H "Accept: application/vnd.github+json" \
+            "https://api.github.com/repos/${GITHUB_REPOSITORY}/tags?per_page=100" \
+            | grep -o '"name":[^,]*' \
+            | cut -d'"' -f4 || true)
+
+          MAX=0
+          for t in $TAGS; do
+            case "$t" in
+              ${PREFIX}*)
+                N=${t#${PREFIX}}
+                if echo "$N" | grep -Eq '^[0-9]+$'; then
+                  if [ "$N" -gt "$MAX" ]; then MAX="$N"; fi
+                fi
+                ;;
+            esac
+          done
+
+          NEXT=$((MAX + 1))
+
+          if [ "$MODE" = "per_day" ]; then
+            TAG="X1BOX-${DATE}-r${NEXT}"
+            NAME_DATE="$DATE"
+          else
+            TAG="X1BOX-r${NEXT}"
+            NAME_DATE="$DATE"
+          fi
+
+          echo "NEXT_R=r${NEXT}" >> $GITHUB_ENV
+          echo "REL_TAG=$TAG" >> $GITHUB_ENV
+          echo "REL_DATE=$NAME_DATE" >> $GITHUB_ENV
+
+      - name: Sign + Rename APK (delete unsigned)
+        shell: bash
+        run: |
+          set -e
+
+          APK_DIR="android/app/build/outputs/apk/release"
+          APK_UNSIGNED="$APK_DIR/app-release-unsigned.apk"
+
+          FINAL_APK="$APK_DIR/X1BOX-${REL_DATE}-${NEXT_R}.apk"
+
+          if [ ! -f "$APK_UNSIGNED" ]; then
+            echo "❌ Unsigned APK not found!"
+            find android/app/build/outputs/apk -type f -name "*.apk" || true
+            exit 1
+          fi
+
+          "$ANDROID_SDK_ROOT/build-tools/36.0.0/apksigner" sign \
+            --ks android/release.jks \
+            --ks-pass "pass:${{ secrets.ANDROID_KEYSTORE_PASSWORD }}" \
+            --ks-key-alias "${{ secrets.ANDROID_KEY_ALIAS }}" \
+            --key-pass "pass:${{ secrets.ANDROID_KEY_PASSWORD }}" \
+            --out "$FINAL_APK" \
+            "$APK_UNSIGNED"
+
+          "$ANDROID_SDK_ROOT/build-tools/36.0.0/apksigner" verify --verbose "$FINAL_APK"
+
+          rm -f "$APK_UNSIGNED"
+
+          echo "SIGNED_APK=$FINAL_APK" >> $GITHUB_ENV
+
+      - name: Create GitHub Release + Upload APK
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: "${{ env.REL_TAG }}"
+          name: "${{ env.REL_TAG }}"
+          draft: false
+          prerelease: true
+          files: |
+            ${{ env.SIGNED_APK }}
+            android/app/build/outputs/bundle/release/*.aab
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
