@@ -24,8 +24,37 @@
 
 #ifdef __ANDROID__
 #include <android/log.h>
+#include <dlfcn.h>
 #endif
 #include <volk.h>
+
+#ifdef __ANDROID__
+static void *g_custom_vk_handle = NULL;
+
+static bool android_try_load_custom_vulkan(void)
+{
+    const char *path = getenv("XEMU_VULKAN_DRIVER");
+    if (!path || path[0] == '\0') {
+        return false;
+    }
+    g_custom_vk_handle = dlopen(path, RTLD_NOW | RTLD_LOCAL);
+    if (!g_custom_vk_handle) {
+        fprintf(stderr, "Custom Vulkan driver dlopen failed: %s\n", dlerror());
+        return false;
+    }
+    PFN_vkGetInstanceProcAddr proc =
+        (PFN_vkGetInstanceProcAddr)dlsym(g_custom_vk_handle, "vkGetInstanceProcAddr");
+    if (!proc) {
+        fprintf(stderr, "Custom Vulkan driver: vkGetInstanceProcAddr not found\n");
+        dlclose(g_custom_vk_handle);
+        g_custom_vk_handle = NULL;
+        return false;
+    }
+    volkInitializeCustom(proc);
+    fprintf(stderr, "Custom Vulkan driver loaded: %s\n", path);
+    return true;
+}
+#endif
 
 #define VkExtensionPropertiesArray GArray
 #define StringArray GArray
@@ -154,7 +183,15 @@ static bool create_instance(PGRAPHState *pg, Error **errp)
     PGRAPHVkState *r = pg->vk_renderer_state;
     VkResult result;
 
+#ifdef __ANDROID__
+    if (!android_try_load_custom_vulkan()) {
+        result = volkInitialize();
+    } else {
+        result = VK_SUCCESS;
+    }
+#else
     result = volkInitialize();
+#endif
     if (result != VK_SUCCESS) {
         error_setg(errp, "volkInitialize failed");
         return false;

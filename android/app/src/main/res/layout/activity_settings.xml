@@ -140,6 +140,59 @@
 
           </com.google.android.material.button.MaterialButtonToggleGroup>
 
+          <!-- ── VULKAN DRIVER ── -->
+          <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:layout_marginBottom="8dp"
+            android:text="@string/settings_section_vulkan_driver"
+            android:textAppearance="@style/TextAppearance.Material3.LabelLarge"
+            android:textColor="@color/xemu_green" />
+
+          <TextView
+            android:id="@+id/tv_vulkan_driver_name"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="8dp"
+            android:textAppearance="@style/TextAppearance.Material3.BodyMedium"
+            android:textColor="@color/xemu_text_muted" />
+
+          <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="4dp"
+            android:orientation="horizontal"
+            android:weightSum="2">
+
+            <com.google.android.material.button.MaterialButton
+              android:id="@+id/btn_vulkan_browse"
+              style="?attr/materialButtonOutlinedStyle"
+              android:layout_width="0dp"
+              android:layout_height="wrap_content"
+              android:layout_marginEnd="4dp"
+              android:layout_weight="1"
+              android:text="@string/settings_vulkan_driver_browse" />
+
+            <com.google.android.material.button.MaterialButton
+              android:id="@+id/btn_vulkan_clear"
+              style="?attr/materialButtonOutlinedStyle"
+              android:layout_width="0dp"
+              android:layout_height="wrap_content"
+              android:layout_marginStart="4dp"
+              android:layout_weight="1"
+              android:text="@string/settings_vulkan_driver_clear" />
+
+          </LinearLayout>
+
+          <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="12dp"
+            android:text="@string/settings_vulkan_driver_hint"
+            android:textAppearance="@style/TextAppearance.Material3.BodySmall"
+            android:textColor="@color/xemu_text_muted" />
+
           <!-- ── PERFORMANCE ── -->
           <TextView
             android:layout_width="match_parent"
