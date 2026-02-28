@@ -693,6 +693,8 @@ static bool WriteConfigToml(const std::string& config_path,
   return true;
 }
 
+extern "C" void xemu_android_set_display_mode_setting(int mode);
+
 static SetupFiles SyncSetupFiles() {
   SetupFiles out{};
   JNIEnv* env = GetEnv();
@@ -799,6 +801,21 @@ static SetupFiles SyncSetupFiles() {
     }
   }
   out.audio_driver = GetPrefString(env, activity, "setting_audio_driver");
+
+  int displayMode = GetPrefInt(env, activity, "setting_display_mode", 0);
+  xemu_android_set_display_mode_setting(displayMode);
+
+  const std::string vulkanDriverUri = GetPrefString(env, activity, "setting_vulkan_driver_uri");
+  if (!vulkanDriverUri.empty()) {
+    std::string driverPath = base + "/vulkan_driver.so";
+    if (CopyUriToPath(env, activity, vulkanDriverUri, driverPath)) {
+      chmod(driverPath.c_str(), 0755);
+      setenv("XEMU_VULKAN_DRIVER", driverPath.c_str(), 1);
+      LogInfoFmt("Custom Vulkan driver staged: %s", driverPath.c_str());
+    } else {
+      LogError("Failed to copy custom Vulkan driver; using system default");
+    }
+  }
 
   out.config_path = base + "/xemu.toml";
   WriteConfigToml(out.config_path, out.mcpx, out.flash, out.hdd, out.dvd, out.eeprom, emuSettings);
