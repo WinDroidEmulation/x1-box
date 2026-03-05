@@ -36,13 +36,12 @@ jobs:
           yes | sdkmanager --licenses
           sdkmanager \
             "platform-tools" \
-            "platforms;android-36" \
-            "build-tools;36.1.0" \
+            "platforms;android-34" \
+            "build-tools;36.0.0" \
             "cmake;3.30.3" \
             "ndk;29.0.14206865"
           echo "ANDROID_NDK_HOME=$ANDROID_SDK_ROOT/ndk/29.0.14206865" >> $GITHUB_ENV
           echo "ANDROID_NDK_ROOT=$ANDROID_SDK_ROOT/ndk/29.0.14206865" >> $GITHUB_ENV
-          echo "BUILD_TOOLS_VERSION=36.1.0" >> $GITHUB_ENV
 
       - name: Install Linux build tools
         run: |
@@ -75,7 +74,7 @@ jobs:
           rustup target add aarch64-linux-android
           rustup target list --installed
 
-      - name: Export Android toolchain for cargo (minSdk 26)
+      - name: Export Android toolchain for cargo
         shell: bash
         run: |
           set -e
@@ -92,6 +91,7 @@ jobs:
           GRADLE="android/app/build.gradle.kts"
           STRINGS="android/app/src/main/res/values/strings.xml"
 
+          # ---- versionName (required) ----
           if [ ! -f "$GRADLE" ]; then
             echo "❌ $GRADLE not found"
             exit 1
@@ -103,6 +103,7 @@ jobs:
             exit 1
           fi
 
+          # ---- app_name (required) ----
           if [ ! -f "$STRINGS" ]; then
             echo "❌ $STRINGS not found"
             exit 1
@@ -114,6 +115,7 @@ jobs:
             exit 1
           fi
 
+          # Safe filename: spaces -> -, remove weird chars
           APP_NAME_SAFE=$(echo "$APP_NAME" | tr ' ' '-' | tr -cd 'A-Za-z0-9._-')
           if [ -z "$APP_NAME_SAFE" ]; then
             echo "❌ APP_NAME_SAFE empty after sanitize"
@@ -214,13 +216,13 @@ jobs:
           echo "REL_NAME=$TAG" >> $GITHUB_ENV
           echo "Using tag: $TAG"
 
-      - name: Zipalign + Sign + Rename APK (delete temp)
+      - name: Sign + Rename APK (delete unsigned)
         shell: bash
         run: |
           set -e
           APK_DIR="android/app/build/outputs/apk/release"
           APK_UNSIGNED="$APK_DIR/app-release-unsigned.apk"
-          APK_ALIGNED="$APK_DIR/app-release-aligned.apk"
+
           FINAL_APK="$APK_DIR/${APP_NAME_SAFE}-${VERSION_NAME}.apk"
 
           if [ ! -f "$APK_UNSIGNED" ]; then
@@ -229,24 +231,16 @@ jobs:
             exit 1
           fi
 
-          echo "✅ Zipalign..."
-          "$ANDROID_SDK_ROOT/build-tools/${BUILD_TOOLS_VERSION}/zipalign" -f 4 \
-            "$APK_UNSIGNED" \
-            "$APK_ALIGNED"
-
-          echo "✅ Sign..."
-          "$ANDROID_SDK_ROOT/build-tools/${BUILD_TOOLS_VERSION}/apksigner" sign \
+          "$ANDROID_SDK_ROOT/build-tools/36.0.0/apksigner" sign \
             --ks android/release.jks \
             --ks-pass "pass:${{ secrets.ANDROID_KEYSTORE_PASSWORD }}" \
             --ks-key-alias "${{ secrets.ANDROID_KEY_ALIAS }}" \
             --key-pass "pass:${{ secrets.ANDROID_KEY_PASSWORD }}" \
             --out "$FINAL_APK" \
-            "$APK_ALIGNED"
+            "$APK_UNSIGNED"
 
-          echo "✅ Verify..."
-          "$ANDROID_SDK_ROOT/build-tools/${BUILD_TOOLS_VERSION}/apksigner" verify --verbose "$FINAL_APK"
-
-          rm -f "$APK_UNSIGNED" "$APK_ALIGNED"
+          "$ANDROID_SDK_ROOT/build-tools/36.0.0/apksigner" verify --verbose "$FINAL_APK"
+          rm -f "$APK_UNSIGNED"
           echo "SIGNED_APK=$FINAL_APK" >> $GITHUB_ENV
 
       - name: Create GitHub Release + Upload APK
