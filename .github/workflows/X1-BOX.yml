@@ -168,7 +168,7 @@ jobs:
           echo "${{ secrets.ANDROID_KEYSTORE_B64 }}" | base64 -d > android/release.jks
           ls -la android/release.jks
 
-      - name: Build Release (APK + AAB)
+      - name: Build Release (APK only)
         working-directory: android
         shell: bash
         run: |
@@ -176,7 +176,7 @@ jobs:
           chmod +x gradlew
           ./gradlew --version
           ./gradlew clean
-          ./gradlew :app:assembleRelease :app:bundleRelease
+          ./gradlew :app:assembleRelease
 
       - name: Set unique Release Tag (auto from app + version)
         shell: bash
@@ -240,6 +240,5 @@ jobs:
           prerelease: false
           files: |
             ${{ env.SIGNED_APK }}
-            android/app/build/outputs/bundle/release/*.aab
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
