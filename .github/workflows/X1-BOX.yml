@@ -42,6 +42,7 @@ jobs:
             "ndk;29.0.14206865"
           echo "ANDROID_NDK_HOME=$ANDROID_SDK_ROOT/ndk/29.0.14206865" >> $GITHUB_ENV
           echo "ANDROID_NDK_ROOT=$ANDROID_SDK_ROOT/ndk/29.0.14206865" >> $GITHUB_ENV
+          echo "BUILD_TOOLS=36.1.0" >> $GITHUB_ENV
 
       - name: Install Linux build tools
         run: |
@@ -82,7 +83,7 @@ jobs:
           echo "CXX_aarch64_linux_android=$ANDROID_NDK_ROOT/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android26-clang++" >> $GITHUB_ENV
           echo "AR_aarch64_linux_android=$ANDROID_NDK_ROOT/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-ar" >> $GITHUB_ENV
 
-      - name: Detect App Name + Version (auto)
+      - name: Detect App Name + Version + minSdk/targetSdk (from build.gradle.kts)
         id: meta
         shell: bash
         run: |
@@ -99,6 +100,18 @@ jobs:
           VERSION_NAME=$(grep -m1 -E 'versionName\s*=' "$GRADLE" | sed -E 's/.*"([^"]+)".*/\1/' || true)
           if [ -z "$VERSION_NAME" ]; then
             echo "❌ versionName not detected in $GRADLE"
+            exit 1
+          fi
+
+          MIN_SDK=$(grep -m1 -E 'minSdk\s*=' "$GRADLE" | sed -E 's/[^0-9]*([0-9]+).*/\1/' || true)
+          if [ -z "$MIN_SDK" ]; then
+            echo "❌ minSdk not detected in $GRADLE"
+            exit 1
+          fi
+
+          TARGET_SDK=$(grep -m1 -E 'targetSdk\s*=' "$GRADLE" | sed -E 's/[^0-9]*([0-9]+).*/\1/' || true)
+          if [ -z "$TARGET_SDK" ]; then
+            echo "❌ targetSdk not detected in $GRADLE"
             exit 1
           fi
 
@@ -120,12 +133,16 @@ jobs:
           fi
 
           echo "VERSION_NAME=$VERSION_NAME" >> $GITHUB_ENV
+          echo "MIN_SDK=$MIN_SDK" >> $GITHUB_ENV
+          echo "TARGET_SDK=$TARGET_SDK" >> $GITHUB_ENV
           echo "APP_NAME=$APP_NAME" >> $GITHUB_ENV
           echo "APP_NAME_SAFE=$APP_NAME_SAFE" >> $GITHUB_ENV
 
           echo "Detected APP_NAME=$APP_NAME"
           echo "Detected APP_NAME_SAFE=$APP_NAME_SAFE"
           echo "Detected VERSION_NAME=$VERSION_NAME"
+          echo "Detected MIN_SDK=$MIN_SDK"
+          echo "Detected TARGET_SDK=$TARGET_SDK"
 
       - name: Remove org.gradle.java.home (force setup-java)
         shell: bash
@@ -213,7 +230,7 @@ jobs:
           echo "REL_NAME=$TAG" >> $GITHUB_ENV
           echo "Using tag: $TAG"
 
-      - name: Zipalign + Sign + Rename APK (v1+v2+v3) (no v4)
+      - name: Zipalign + Sign + Rename APK (v1+v2+v3) (no v4 / no idsig)
         shell: bash
         run: |
           set -e
@@ -228,15 +245,15 @@ jobs:
             exit 1
           fi
 
-          "$ANDROID_SDK_ROOT/build-tools/36.1.0/zipalign" -f -p 4 \
+          "$ANDROID_SDK_ROOT/build-tools/${BUILD_TOOLS}/zipalign" -f -p 4 \
             "$APK_UNSIGNED" "$APK_ALIGNED"
 
-          "$ANDROID_SDK_ROOT/build-tools/36.1.0/apksigner" sign \
+          "$ANDROID_SDK_ROOT/build-tools/${BUILD_TOOLS}/apksigner" sign \
             --ks android/release.jks \
             --ks-pass "pass:${{ secrets.ANDROID_KEYSTORE_PASSWORD }}" \
             --ks-key-alias "${{ secrets.ANDROID_KEY_ALIAS }}" \
             --key-pass "pass:${{ secrets.ANDROID_KEY_PASSWORD }}" \
-            --min-sdk-version 21 \
+            --min-sdk-version "${MIN_SDK}" \
             --v1-signing-enabled true \
             --v2-signing-enabled true \
             --v3-signing-enabled true \
@@ -246,7 +263,7 @@ jobs:
 
           echo "## APK Signature Verification" > verify.txt
           echo "" >> verify.txt
-          "$ANDROID_SDK_ROOT/build-tools/36.1.0/apksigner" verify --verbose "$FINAL_APK" >> verify.txt
+          "$ANDROID_SDK_ROOT/build-tools/${BUILD_TOOLS}/apksigner" verify --verbose "$FINAL_APK" >> verify.txt
 
           rm -f "$APK_UNSIGNED" "$APK_ALIGNED"
           echo "SIGNED_APK=$FINAL_APK" >> $GITHUB_ENV
