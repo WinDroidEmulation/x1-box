@@ -91,6 +91,7 @@ jobs:
           GRADLE="android/app/build.gradle.kts"
           STRINGS="android/app/src/main/res/values/strings.xml"
 
+          # ---- versionName (required) ----
           if [ ! -f "$GRADLE" ]; then
             echo "❌ $GRADLE not found"
             exit 1
@@ -102,6 +103,7 @@ jobs:
             exit 1
           fi
 
+          # ---- app_name (required) ----
           if [ ! -f "$STRINGS" ]; then
             echo "❌ $STRINGS not found"
             exit 1
@@ -113,6 +115,7 @@ jobs:
             exit 1
           fi
 
+          # Safe filename: spaces -> -, remove weird chars
           APP_NAME_SAFE=$(echo "$APP_NAME" | tr ' ' '-' | tr -cd 'A-Za-z0-9._-')
           if [ -z "$APP_NAME_SAFE" ]; then
             echo "❌ APP_NAME_SAFE empty after sanitize"
@@ -176,15 +179,6 @@ jobs:
           echo "${{ secrets.ANDROID_KEYSTORE_B64 }}" | base64 -d > android/release.jks
           ls -la android/release.jks
 
-      - name: Export signing env for Gradle (safe)
-        shell: bash
-        run: |
-          set -e
-          echo "ANDROID_SIGNING_STORE_FILE=release.jks" >> $GITHUB_ENV
-          echo "ANDROID_SIGNING_STORE_PASSWORD=${{ secrets.ANDROID_KEYSTORE_PASSWORD }}" >> $GITHUB_ENV
-          echo "ANDROID_SIGNING_KEY_ALIAS=${{ secrets.ANDROID_KEY_ALIAS }}" >> $GITHUB_ENV
-          echo "ANDROID_SIGNING_KEY_PASSWORD=${{ secrets.ANDROID_KEY_PASSWORD }}" >> $GITHUB_ENV
-
       - name: Build Release (APK + AAB)
         working-directory: android
         shell: bash
@@ -228,6 +222,7 @@ jobs:
           set -e
           APK_DIR="android/app/build/outputs/apk/release"
           APK_UNSIGNED="$APK_DIR/app-release-unsigned.apk"
+
           FINAL_APK="$APK_DIR/${APP_NAME_SAFE}-${VERSION_NAME}.apk"
 
           if [ ! -f "$APK_UNSIGNED" ]; then
@@ -246,78 +241,9 @@ jobs:
 
           "$ANDROID_SDK_ROOT/build-tools/36.0.0/apksigner" verify --verbose "$FINAL_APK"
           rm -f "$APK_UNSIGNED"
-
           echo "SIGNED_APK=$FINAL_APK" >> $GITHUB_ENV
 
-      - name: Sign AAB (jarsigner) + Verify
-        shell: bash
-        run: |
-          set -e
-          AAB_DIR="android/app/build/outputs/bundle/release"
-          AAB_FILE=$(ls -1 "$AAB_DIR"/*.aab | head -n 1 || true)
-
-          if [ -z "$AAB_FILE" ] || [ ! -f "$AAB_FILE" ]; then
-            echo "❌ AAB not found!"
-            find android/app/build/outputs/bundle -type f -name "*.aab" || true
-            exit 1
-          fi
-
-          FINAL_AAB="$AAB_DIR/${APP_NAME_SAFE}-${VERSION_NAME}.aab"
-          cp -f "$AAB_FILE" "$FINAL_AAB"
-
-          jarsigner -keystore android/release.jks \
-            -storepass "${{ secrets.ANDROID_KEYSTORE_PASSWORD }}" \
-            -keypass "${{ secrets.ANDROID_KEY_PASSWORD }}" \
-            -sigalg SHA256withRSA -digestalg SHA-256 \
-            "$FINAL_AAB" "${{ secrets.ANDROID_KEY_ALIAS }}"
-
-          jarsigner -verify -verbose -certs "$FINAL_AAB"
-
-          echo "SIGNED_AAB=$FINAL_AAB" >> $GITHUB_ENV
-
-      - name: Build Universal Signed APK from AAB (bundletool)
-        shell: bash
-        run: |
-          set -e
-          BT_VER="1.16.0"
-          mkdir -p tools
-          curl -L -o tools/bundletool.jar \
-            "https://github.com/google/bundletool/releases/download/${BT_VER}/bundletool-all-${BT_VER}.jar"
-
-          AAB="${{ env.SIGNED_AAB }}"
-          OUT_APKS="android/app/build/outputs/bundle/release/universal.apks"
-          OUT_DIR="android/app/build/outputs/bundle/release/universal_out"
-          mkdir -p "$OUT_DIR"
-
-          java -jar tools/bundletool.jar build-apks \
-            --bundle="$AAB" \
-            --output="$OUT_APKS" \
-            --mode=universal \
-            --ks=android/release.jks \
-            --ks-key-alias="${{ secrets.ANDROID_KEY_ALIAS }}" \
-            --ks-pass=pass:${{ secrets.ANDROID_KEYSTORE_PASSWORD }} \
-            --key-pass=pass:${{ secrets.ANDROID_KEY_PASSWORD }}
-
-          unzip -o "$OUT_APKS" -d "$OUT_DIR"
-
-          UNIVERSAL_APK_SRC="$OUT_DIR/universal.apk"
-          if [ ! -f "$UNIVERSAL_APK_SRC" ]; then
-            UNIVERSAL_APK_SRC=$(find "$OUT_DIR" -type f -name "universal.apk" | head -n 1 || true)
-          fi
-
-          if [ -z "$UNIVERSAL_APK_SRC" ] || [ ! -f "$UNIVERSAL_APK_SRC" ]; then
-            echo "❌ universal.apk not found inside .apks"
-            find "$OUT_DIR" -type f -maxdepth 3 || true
-            exit 1
-          fi
-
-          FINAL_UNIVERSAL="android/app/build/outputs/bundle/release/${APP_NAME_SAFE}-${VERSION_NAME}-universal.apk"
-          cp -f "$UNIVERSAL_APK_SRC" "$FINAL_UNIVERSAL"
-
-          "$ANDROID_SDK_ROOT/build-tools/36.0.0/apksigner" verify --verbose "$FINAL_UNIVERSAL"
-          echo "UNIVERSAL_APK=$FINAL_UNIVERSAL" >> $GITHUB_ENV
-
-      - name: Create GitHub Release + Upload (Signed APK + Signed AAB + Universal APK)
+      - name: Create GitHub Release + Upload APK
         uses: softprops/action-gh-release@v2
         with:
           tag_name: "${{ env.REL_TAG }}"
@@ -326,7 +252,6 @@ jobs:
           prerelease: false
           files: |
             ${{ env.SIGNED_APK }}
-            ${{ env.SIGNED_AAB }}
-            ${{ env.UNIVERSAL_APK }}
+            android/app/build/outputs/bundle/release/*.aab
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
