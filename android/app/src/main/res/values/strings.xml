@@ -116,8 +116,33 @@
   <string name="settings_audio_driver_opensles">OpenSL ES</string>
   <string name="settings_audio_driver_aaudio">AAudio</string>
   <string name="settings_audio_driver_disabled">Disabled</string>
+  <string name="settings_section_eeprom">EEPROM</string>
+  <string name="settings_eeprom_language">EEPROM Language</string>
+  <string name="settings_eeprom_language_english">English</string>
+  <string name="settings_eeprom_language_japanese">Japanese</string>
+  <string name="settings_eeprom_language_german">German</string>
+  <string name="settings_eeprom_language_french">French</string>
+  <string name="settings_eeprom_language_spanish">Spanish</string>
+  <string name="settings_eeprom_language_italian">Italian</string>
+  <string name="settings_eeprom_language_korean">Korean</string>
+  <string name="settings_eeprom_language_chinese">Chinese</string>
+  <string name="settings_eeprom_language_portuguese">Portuguese</string>
+  <string name="settings_eeprom_video_standard">EEPROM Video Standard</string>
+  <string name="settings_eeprom_video_standard_ntsc_m">NTSC-M</string>
+  <string name="settings_eeprom_video_standard_ntsc_j">NTSC-J</string>
+  <string name="settings_eeprom_video_standard_pal_i">PAL-I</string>
+  <string name="settings_eeprom_video_standard_pal_m">PAL-M</string>
+  <string name="settings_eeprom_status_ready">EEPROM file: %1$s</string>
+  <string name="settings_eeprom_status_missing">EEPROM not found at %1$s. Launch a game once to create it.</string>
+  <string name="settings_eeprom_status_invalid">EEPROM is invalid at %1$s.</string>
+  <string name="settings_eeprom_status_error">Failed to read EEPROM at %1$s.</string>
+  <string name="settings_eeprom_status_unknown">EEPROM file: %1$s (contains unknown values; saving will normalize them)</string>
+  <string name="settings_eeprom_hint">Updates language and video standard in eeprom.bin. Restart emulation after saving.</string>
 
   <string name="settings_saved">Settings saved</string>
+  <string name="settings_saved_with_eeprom">Settings and EEPROM saved</string>
+  <string name="settings_saved_eeprom_missing">Settings saved. Launch a game once, then edit EEPROM.</string>
+  <string name="settings_saved_eeprom_failed">Settings saved, but EEPROM update failed</string>
 
   <string name="in_game_menu_title">Game Menu</string>
   <string name="in_game_menu_resume">Resume</string>
