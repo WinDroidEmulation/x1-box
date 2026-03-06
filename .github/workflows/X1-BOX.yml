@@ -164,7 +164,7 @@ jobs:
         run: |
           set -e
           {
-            echo "storeFile=app/release.jks"
+            echo "storeFile=release.jks"
             echo "storePassword=${{ secrets.ANDROID_KEYSTORE_PASSWORD }}"
             echo "keyAlias=${{ secrets.ANDROID_KEY_ALIAS }}"
             echo "keyPassword=${{ secrets.ANDROID_KEY_PASSWORD }}"
