@@ -1,4 +1,4 @@
-name: Android (X1 BOX) - Signed
+name: X1 BOX - Signed
 
 on:
   workflow_dispatch:
@@ -159,6 +159,17 @@ jobs:
           set -e
           echo "${{ secrets.ANDROID_KEYSTORE_B64 }}" | base64 -d > android/release.jks
 
+      - name: Create root key.properties for Gradle signing
+        shell: bash
+        run: |
+          set -e
+          cat <<EOF > key.properties
+          storeFile=../release.jks
+          storePassword=${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          keyAlias=${{ secrets.ANDROID_KEY_ALIAS }}
+          keyPassword=${{ secrets.ANDROID_KEY_PASSWORD }}
+          EOF
+
       - name: Build Release APK
         working-directory: android
         shell: bash
@@ -179,32 +190,20 @@ jobs:
           echo "REL_TAG=$TAG" >> $GITHUB_ENV
           echo "REL_NAME=$TAG" >> $GITHUB_ENV
 
-      - name: Zipalign + Sign + Rename APK
+      - name: Get signed APK from Gradle (rename)
         shell: bash
         run: |
           set -e
           APK_DIR="android/app/build/outputs/apk/release"
-          APK_UNSIGNED="$APK_DIR/app-release-unsigned.apk"
-
-          ALIGNED_APK="$APK_DIR/app-release-unsigned-aligned.apk"
           FINAL_APK="$APK_DIR/${APP_NAME_SAFE}-${VERSION_NAME}.apk"
 
-          "$ANDROID_SDK_ROOT/build-tools/36.1.0/zipalign" -v 4 \
-            "$APK_UNSIGNED" "$ALIGNED_APK"
+          if [ ! -f "$APK_DIR/app-release.apk" ]; then
+            echo "❌ Gradle signed APK not found!"
+            find android/app/build/outputs/apk -type f -name "*.apk" || true
+            exit 1
+          fi
 
-          "$ANDROID_SDK_ROOT/build-tools/36.1.0/apksigner" sign \
-            --ks android/release.jks \
-            --ks-pass "pass:${{ secrets.ANDROID_KEYSTORE_PASSWORD }}" \
-            --ks-key-alias "${{ secrets.ANDROID_KEY_ALIAS }}" \
-            --key-pass "pass:${{ secrets.ANDROID_KEY_PASSWORD }}" \
-            --out "$FINAL_APK" \
-            "$ALIGNED_APK"
-
-          "$ANDROID_SDK_ROOT/build-tools/36.1.0/apksigner" verify --verbose "$FINAL_APK"
-
-          rm -f "$APK_UNSIGNED"
-          rm -f "$ALIGNED_APK"
-
+          mv "$APK_DIR/app-release.apk" "$FINAL_APK"
           echo "SIGNED_APK=$FINAL_APK" >> $GITHUB_ENV
 
       - name: Create GitHub Release + Upload APK
