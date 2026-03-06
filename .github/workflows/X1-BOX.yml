@@ -164,11 +164,11 @@ jobs:
         run: |
           set -e
           cat <<EOF > android/key.properties
-          storeFile=release.jks
-          storePassword=${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
-          keyAlias=${{ secrets.ANDROID_KEY_ALIAS }}
-          keyPassword=${{ secrets.ANDROID_KEY_PASSWORD }}
-          EOF
+storeFile=release.jks
+storePassword=${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+keyAlias=${{ secrets.ANDROID_KEY_ALIAS }}
+keyPassword=${{ secrets.ANDROID_KEY_PASSWORD }}
+EOF
 
       - name: Build Release APK
         working-directory: android
